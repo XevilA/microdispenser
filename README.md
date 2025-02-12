@@ -1,73 +1,83 @@
-# 📌 คู่มือการใช้งาน MicroPython กับ KidBright
+# 📌 การใช้งาน MicroPython กับ KidBright และ Ultrasonic Sensor
 
 ## 🔥 เกี่ยวกับโปรเจกต์
-
-โปรเจกต์นี้เป็นแนวทางการใช้งาน **MicroPython บนบอร์ด KidBright** เหมาะสำหรับมือใหม่ที่ต้องการเรียนรู้การเขียนโปรแกรมเพื่อควบคุมอุปกรณ์อิเล็กทรอนิกส์ 🛠️
+โปรเจกต์นี้เป็น **เครื่องจ่ายแอลกอฮอล์อัตโนมัติ** โดยใช้ **MicroPython บน KidBright** ควบคุม **เซ็นเซอร์อัลตราโซนิก (Ultrasonic Sensor)** และ **เซอร์โวมอเตอร์ (Servo Motor)**
 
 ## 🛠️ อุปกรณ์ที่ต้องใช้
+- **บอร์ด KidBright**
+- **Ultrasonic Sensor (HC-SR04)**
+- **Servo Motor**
+- **สาย USB สำหรับอัปโหลดโค้ด**
 
-- 🖥️ **คอมพิวเตอร์** (Windows / macOS / Linux)
+## 🔌 การต่อวงจร
+| อุปกรณ์          | ขา KidBright |
+|-----------------|-------------|
+| Trig (Ultrasonic) | **12 (D12)** |
+| Echo (Ultrasonic) | **14 (D14)** |
+| Servo (Signal)    | **15 (D15)** |
+| VCC (5V)          | **5V**       |
+| GND               | **GND**      |
 
-- 📟 **บอร์ด KidBright**
-
-- 🔌 **สาย USB** (สำหรับเชื่อมต่อ KidBright กับคอมพิวเตอร์)
-
-- 💡 **เซ็นเซอร์ต่าง ๆ** เช่น Light Sensor, Temperature Sensor, Servo Motor ฯลฯ
-
-## 🔧 การติดตั้ง MicroPython บน KidBright
-
-1\. ดาวน์โหลด **Firmware MicroPython** สำหรับ KidBright ได้ที่ [GitHub KidBright](https://github.com/KidBright)
-
-2\. ใช้โปรแกรม **esptool.py** หรือ **Thonny IDE** เพื่อลง MicroPython
-
-3\. เชื่อมต่อ KidBright ผ่าน USB แล้วแฟลชไฟล์ `.bin` ลงบอร์ด
-
-## 📝 ตัวอย่างโค้ด MicroPython บน KidBright
-
-### ✨ กระพริบไฟ LED บน KidBright
-
+## 📝 โค้ด MicroPython สำหรับควบคุมการจ่ายแอลกอฮอล์
 ```python
-
-from machine import Pin
-
+from machine import Pin, PWM
 import time
 
-led = Pin(33, Pin.OUT)  # ขา LED บน KidBright
+# กำหนดขาสำหรับเซ็นเซอร์อัลตราโซนิก
+trig = Pin(12, Pin.OUT)
+echo = Pin(14, Pin.IN)
 
+# กำหนดขาสำหรับเซอร์โวมอเตอร์
+servo = PWM(Pin(15), freq=50)  # ความถี่ 50Hz (มาตรฐานของ Servo)
+
+# ฟังก์ชันวัดระยะทางจากเซ็นเซอร์อัลตราโซนิก
+def get_distance():
+    trig.low()
+    time.sleep_us(2)
+    trig.high()
+    time.sleep_us(10)
+    trig.low()
+    
+    while echo.value() == 0:
+        pulse_start = time.ticks_us()
+    while echo.value() == 1:
+        pulse_end = time.ticks_us()
+    
+    duration = time.ticks_diff(pulse_end, pulse_start)
+    distance = (duration * 0.0343) / 2  # แปลงเวลาเป็นระยะทาง (cm)
+    return distance
+
+# ฟังก์ชันควบคุมเซอร์โว
+def set_servo(angle):
+    duty = int((angle / 180) * 102 + 26)  # คำนวณ Duty Cycle
+    servo.duty(duty)
+
+# วนลูปหลัก
 while True:
-
-    led.value(1)  # เปิดไฟ
-
-    time.sleep(1)
-
-    led.value(0)  # ปิดไฟ
-
-    time.sleep(1)
-
+    dist = get_distance()
+    print("ระยะทาง:", dist, "cm")
+    
+    if dist < 10:  # ถ้าระยะ < 10 ซม. ให้กดแอลกอฮอล์
+        set_servo(0)  # กดหัวจ่าย
+        time.sleep(0.5)
+        set_servo(90)  # คืนตำแหน่งเดิม
+        time.sleep(2)  # ป้องกันการกดซ้ำ
+    
+    time.sleep(0.1)
 ```
 
-### 📡 อ่านค่า Light Sensor
+## 🚀 วิธีการใช้งาน
+1. **ต่อวงจร** ตามตารางด้านบน
+2. **อัปโหลดโค้ด** ไปยัง KidBright ผ่าน **Thonny IDE** หรือ **Ampy**
+3. **เปิดใช้งานบอร์ด** และลองนำมือเข้าใกล้เซ็นเซอร์ (น้อยกว่า 10 ซม.)
+4. **เซอร์โวจะหมุน** เพื่อกดหัวจ่ายแอลกอฮอล์อัตโนมัติ
 
-```python
+## 📌 หมายเหตุ
+- ค่าระยะทางที่ **10 ซม.** สามารถเปลี่ยนแปลงได้ตามต้องการ
+- ต้องการพลังงานที่เพียงพอ **(แนะนำใช้แหล่งจ่าย 5V แยกสำหรับเซอร์โว)**
 
-from machine import ADC
-
-light_sensor = ADC(34)  # ขา Light Sensor
-
-light_sensor.atten(ADC.ATTN_11DB)  # ปรับช่วงการอ่านค่า
-
-while True:
-
-    value = light_sensor.read()
-
-    print("Light Level:", value)
-
-```
-
-## 🚀 แหล่งข้อมูลเพิ่มเติม
-
-- [เว็บไซต์ทางการของ KidBright](https://www.kid-bright.org/)
-
-- [MicroPython Official Docs](https://micropython.org/)
+## 🔗 แหล่งข้อมูลเพิ่มเติม
+- [MicroPython Official Documentation](https://micropython.org/)
+- [KidBright Official Website](https://www.kid-bright.org/)
 
 📌 **ร่วมพัฒนาและช่วยกันแก้ไขได้ที่ GitHub!** ✅
